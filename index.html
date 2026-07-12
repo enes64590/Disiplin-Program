@@ -7,6 +7,8 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <style>
   body { font-family: 'Inter', sans-serif; background: #F1F3F6; }
   .font-display { font-family: 'Baloo 2', sans-serif; font-weight: 700; }
@@ -16,6 +18,25 @@
 <div id="root"></div>
 
 <script>
+/* ---------- FIREBASE SETUP ---------- */
+const firebaseConfig = {
+  apiKey: "AIzaSyD21NukyZrv8jgDkf5FI1vO2FaFYspOc8I",
+  authDomain: "disiplinprogram.firebaseapp.com",
+  databaseURL: "https://disiplinprogram-default-rtdb.firebaseio.com",
+  projectId: "disiplinprogram",
+  storageBucket: "disiplinprogram.firebasestorage.app",
+  messagingSenderId: "863365083229",
+  appId: "1:863365083229:web:178ed938b682290ff99db4",
+  measurementId: "G-50HZ0RPVV7"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+function sanitizeKey(name) {
+  // Firebase keys can't contain . # $ [ ] / — strip anything else out too, keep it simple
+  return name.replace(/[.#$\[\]\/\s]/g, '').toLowerCase();
+}
+
 /* ---------- ICONS ---------- */
 const ICON = {
   plus: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
@@ -30,14 +51,25 @@ const ICON = {
   chevUp: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>',
 };
 
-/* ---------- STORAGE (real browser localStorage) ---------- */
+/* ---------- STORAGE (Firebase Realtime Database — shared across every device) ---------- */
 const store = {
-  getUsers() { return JSON.parse(localStorage.getItem('gd_users') || '{}'); },
-  saveUsers(u) { localStorage.setItem('gd_users', JSON.stringify(u)); },
+  async getUsers() {
+    const snap = await db.ref('users').once('value');
+    return snap.val() || {};
+  },
+  async saveUser(username, password) {
+    await db.ref('users/' + username).set(password);
+  },
   getSession() { return localStorage.getItem('gd_session') || null; },
   setSession(name) { localStorage.setItem('gd_session', name || ''); },
-  getGroups(user) { return JSON.parse(localStorage.getItem('gd_tasks_' + user) || '[]'); },
-  saveGroups(user, groups) { localStorage.setItem('gd_tasks_' + user, JSON.stringify(groups)); },
+  async getGroups(username) {
+    const snap = await db.ref('tasks/' + username).once('value');
+    const val = snap.val();
+    return val ? Object.values(val) : [];
+  },
+  async saveGroups(username, groups) {
+    await db.ref('tasks/' + username).set(groups);
+  },
 };
 
 /* ---------- HELPERS ---------- */
@@ -76,10 +108,12 @@ const PRIORITY = {
 
 /* ---------- STATE ---------- */
 let state = {
-  currentUser: store.getSession() || null,
+  booting: true,
+  currentUser: null,
   groups: [],
   authMode: 'login',
   authError: '',
+  authLoading: false,
   modalOpen: false,
   formDate: todayISO(),
   formTitle: '',
@@ -87,27 +121,47 @@ let state = {
   formError: '',
   collapsed: {},
 };
-if (state.currentUser) state.groups = store.getGroups(state.currentUser);
 
 function setState(patch) { Object.assign(state, patch); render(); }
 
+(async function boot() {
+  const session = store.getSession();
+  if (session) {
+    try {
+      state.currentUser = session;
+      state.groups = await store.getGroups(session);
+    } catch {
+      state.currentUser = null;
+    }
+  }
+  state.booting = false;
+  render();
+})();
+
 /* ---------- ACTIONS ---------- */
-function handleAuth(e) {
+async function handleAuth(e) {
   e.preventDefault();
-  const name = document.getElementById('authName').value.trim();
+  const rawName = document.getElementById('authName').value.trim();
   const pass = document.getElementById('authPass').value;
+  const name = sanitizeKey(rawName);
   if (!name || !pass) return setState({ authError: 'Kullanıcı adı ve şifre gerekli.' });
-  const users = store.getUsers();
-  if (state.authMode === 'register') {
-    if (users[name]) return setState({ authError: 'Bu kullanıcı adı zaten alınmış.' });
-    users[name] = pass;
-    store.saveUsers(users);
-    store.setSession(name);
-    setState({ currentUser: name, groups: [], authError: '' });
-  } else {
-    if (!users[name] || users[name] !== pass) return setState({ authError: 'Kullanıcı adı veya şifre hatalı.' });
-    store.setSession(name);
-    setState({ currentUser: name, groups: store.getGroups(name), authError: '' });
+
+  setState({ authLoading: true, authError: '' });
+  try {
+    const users = await store.getUsers();
+    if (state.authMode === 'register') {
+      if (users[name]) { setState({ authLoading: false, authError: 'Bu kullanıcı adı zaten alınmış.' }); return; }
+      await store.saveUser(name, pass);
+      store.setSession(name);
+      setState({ currentUser: name, groups: [], authError: '', authLoading: false });
+    } else {
+      if (!users[name] || users[name] !== pass) { setState({ authLoading: false, authError: 'Kullanıcı adı veya şifre hatalı.' }); return; }
+      store.setSession(name);
+      const groups = await store.getGroups(name);
+      setState({ currentUser: name, groups, authError: '', authLoading: false });
+    }
+  } catch (err) {
+    setState({ authLoading: false, authError: 'Bağlantı sorunu oluştu, tekrar dene.' });
   }
 }
 function handleLogout() {
@@ -122,7 +176,7 @@ function addTaskRow() { state.formTasks.push({ id: uid(), text: '', priority: 'm
 function removeTaskRow(id) {
   if (state.formTasks.length > 1) { state.formTasks = state.formTasks.filter(t => t.id !== id); render(); }
 }
-function saveGroup() {
+async function saveGroup() {
   const title = document.getElementById('formTitle').value.trim();
   const tasks = state.formTasks.filter(t => t.text.trim());
   if (!title) return setState({ formError: 'Lütfen bir başlık gir.' });
@@ -132,28 +186,32 @@ function saveGroup() {
     tasks: tasks.map(t => ({ id: uid(), text: t.text.trim(), priority: t.priority || 'medium', done: false })),
   };
   const next = [newGroup, ...state.groups];
-  store.saveGroups(state.currentUser, next);
+  await store.saveGroups(state.currentUser, next);
   setState({ groups: next, modalOpen: false });
 }
-function toggleTask(groupId, taskId) {
+async function toggleTask(groupId, taskId) {
   const next = state.groups.map(g => g.id === groupId
     ? { ...g, tasks: g.tasks.map(t => t.id === taskId ? { ...t, done: !t.done } : t) } : g);
-  store.saveGroups(state.currentUser, next);
   setState({ groups: next });
+  await store.saveGroups(state.currentUser, next);
 }
-function deleteGroup(groupId) {
+async function deleteGroup(groupId) {
   const next = state.groups.filter(g => g.id !== groupId);
-  store.saveGroups(state.currentUser, next);
   setState({ groups: next });
+  await store.saveGroups(state.currentUser, next);
 }
-function deleteTask(groupId, taskId) {
+async function deleteTask(groupId, taskId) {
   const next = state.groups.map(g => g.id === groupId ? { ...g, tasks: g.tasks.filter(t => t.id !== taskId) } : g);
-  store.saveGroups(state.currentUser, next);
   setState({ groups: next });
+  await store.saveGroups(state.currentUser, next);
 }
 function toggleCollapse(groupId) { state.collapsed[groupId] = !state.collapsed[groupId]; render(); }
 
 /* ---------- RENDER ---------- */
+function renderBooting() {
+  return `<div class="min-h-screen flex items-center justify-center text-slate-400 text-sm">Yükleniyor...</div>`;
+}
+
 function renderAuth() {
   return `
   <div class="min-h-screen flex items-center justify-center px-4">
@@ -183,10 +241,12 @@ function renderAuth() {
             </div>
           </div>
           ${state.authError ? `<p class="text-sm text-rose-600">${esc(state.authError)}</p>` : ''}
-          <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-xl transition">${state.authMode === 'login' ? 'Giriş Yap' : 'Hesap Oluştur'}</button>
+          <button type="submit" ${state.authLoading ? 'disabled' : ''} class="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-semibold py-2.5 rounded-xl transition">
+            ${state.authLoading ? 'Kontrol ediliyor...' : (state.authMode === 'login' ? 'Giriş Yap' : 'Hesap Oluştur')}
+          </button>
         </form>
       </div>
-      <p class="text-center text-xs text-slate-400 mt-4">Görevlerin bu taraycıya kaydedilir, bir sonraki girişinde seni bekliyor olacak.</p>
+      <p class="text-center text-xs text-slate-400 mt-4">Bu hesap artık her cihazdan erişilebilir; aynı kullanıcı adı/şifre ile istediğin telefon veya bilgisayardan giriş yapabilirsin.</p>
     </div>
   </div>`;
 }
@@ -304,7 +364,9 @@ function renderApp() {
 }
 
 function render() {
-  document.getElementById('root').innerHTML = state.currentUser ? renderApp() : renderAuth();
+  const root = document.getElementById('root');
+  if (state.booting) root.innerHTML = renderBooting();
+  else root.innerHTML = state.currentUser ? renderApp() : renderAuth();
 }
 render();
 </script>
