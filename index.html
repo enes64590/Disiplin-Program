@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Görev Defterim</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body { font-family: 'Inter', sans-serif; background: #F1F3F6; }
+  .font-display { font-family: 'Baloo 2', sans-serif; font-weight: 700; }
+</style>
+</head>
+<body class="min-h-screen">
+<div id="root"></div>
+
+<script>
+/* ---------- ICONS ---------- */
+const ICON = {
+  plus: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
+  x: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+  trash: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
+  calendar: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+  logout: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>',
+  book: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
+  lock: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
+  user: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
+  chevDown: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>',
+  chevUp: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>',
+};
+
+/* ---------- STORAGE (real browser localStorage) ---------- */
+const store = {
+  getUsers() { return JSON.parse(localStorage.getItem('gd_users') || '{}'); },
+  saveUsers(u) { localStorage.setItem('gd_users', JSON.stringify(u)); },
+  getSession() { return localStorage.getItem('gd_session') || null; },
+  setSession(name) { localStorage.setItem('gd_session', name || ''); },
+  getGroups(user) { return JSON.parse(localStorage.getItem('gd_tasks_' + user) || '[]'); },
+  saveGroups(user, groups) { localStorage.setItem('gd_tasks_' + user, JSON.stringify(groups)); },
+};
+
+/* ---------- HELPERS ---------- */
+const PALETTE = [
+  { bg: 'bg-indigo-100', text: 'text-indigo-700', border: 'border-l-indigo-400', bar: 'bg-indigo-500' },
+  { bg: 'bg-teal-100', text: 'text-teal-700', border: 'border-l-teal-400', bar: 'bg-teal-500' },
+  { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-l-amber-400', bar: 'bg-amber-500' },
+  { bg: 'bg-rose-100', text: 'text-rose-700', border: 'border-l-rose-400', bar: 'bg-rose-500' },
+  { bg: 'bg-violet-100', text: 'text-violet-700', border: 'border-l-violet-400', bar: 'bg-violet-500' },
+  { bg: 'bg-cyan-100', text: 'text-cyan-700', border: 'border-l-cyan-400', bar: 'bg-cyan-500' },
+];
+function colorFor(title) {
+  let hash = 0;
+  for (let i = 0; i < title.length; i++) hash = (hash * 31 + title.charCodeAt(i)) >>> 0;
+  return PALETTE[hash % PALETTE.length];
+}
+function todayISO() {
+  const d = new Date();
+  const off = d.getTimezoneOffset();
+  return new Date(d.getTime() - off * 60000).toISOString().slice(0, 10);
+}
+function formatDate(iso) {
+  try {
+    const d = new Date(iso + 'T00:00:00');
+    return new Intl.DateTimeFormat('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' }).format(d);
+  } catch { return iso; }
+}
+function uid() { return Math.random().toString(36).slice(2, 10) + Date.now().toString(36); }
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+const PRIORITY = {
+  high: { label: 'Yüksek', dot: 'bg-rose-500', badge: 'bg-rose-100 text-rose-700' },
+  medium: { label: 'Orta', dot: 'bg-amber-500', badge: 'bg-amber-100 text-amber-700' },
+  low: { label: 'Düşük', dot: 'bg-slate-400', badge: 'bg-slate-100 text-slate-600' },
+};
+
+/* ---------- STATE ---------- */
+let state = {
+  currentUser: store.getSession() || null,
+  groups: [],
+  authMode: 'login',
+  authError: '',
+  modalOpen: false,
+  formDate: todayISO(),
+  formTitle: '',
+  formTasks: [{ id: uid(), text: '', priority: 'medium' }],
+  formError: '',
+  collapsed: {},
+};
+if (state.currentUser) state.groups = store.getGroups(state.currentUser);
+
+function setState(patch) { Object.assign(state, patch); render(); }
+
+/* ---------- ACTIONS ---------- */
+function handleAuth(e) {
+  e.preventDefault();
+  const name = document.getElementById('authName').value.trim();
+  const pass = document.getElementById('authPass').value;
+  if (!name || !pass) return setState({ authError: 'Kullanıcı adı ve şifre gerekli.' });
+  const users = store.getUsers();
+  if (state.authMode === 'register') {
+    if (users[name]) return setState({ authError: 'Bu kullanıcı adı zaten alınmış.' });
+    users[name] = pass;
+    store.saveUsers(users);
+    store.setSession(name);
+    setState({ currentUser: name, groups: [], authError: '' });
+  } else {
+    if (!users[name] || users[name] !== pass) return setState({ authError: 'Kullanıcı adı veya şifre hatalı.' });
+    store.setSession(name);
+    setState({ currentUser: name, groups: store.getGroups(name), authError: '' });
+  }
+}
+function handleLogout() {
+  store.setSession('');
+  setState({ currentUser: null, groups: [] });
+}
+function openModal() {
+  setState({ modalOpen: true, formDate: todayISO(), formTitle: '', formTasks: [{ id: uid(), text: '', priority: 'medium' }], formError: '' });
+}
+function closeModal() { setState({ modalOpen: false }); }
+function addTaskRow() { state.formTasks.push({ id: uid(), text: '', priority: 'medium' }); render(); }
+function removeTaskRow(id) {
+  if (state.formTasks.length > 1) { state.formTasks = state.formTasks.filter(t => t.id !== id); render(); }
+}
+function saveGroup() {
+  const title = document.getElementById('formTitle').value.trim();
+  const tasks = state.formTasks.filter(t => t.text.trim());
+  if (!title) return setState({ formError: 'Lütfen bir başlık gir.' });
+  if (tasks.length === 0) return setState({ formError: 'En az bir görev girmelisin.' });
+  const newGroup = {
+    id: uid(), date: document.getElementById('formDate').value || todayISO(), title, createdAt: Date.now(),
+    tasks: tasks.map(t => ({ id: uid(), text: t.text.trim(), priority: t.priority || 'medium', done: false })),
+  };
+  const next = [newGroup, ...state.groups];
+  store.saveGroups(state.currentUser, next);
+  setState({ groups: next, modalOpen: false });
+}
+function toggleTask(groupId, taskId) {
+  const next = state.groups.map(g => g.id === groupId
+    ? { ...g, tasks: g.tasks.map(t => t.id === taskId ? { ...t, done: !t.done } : t) } : g);
+  store.saveGroups(state.currentUser, next);
+  setState({ groups: next });
+}
+function deleteGroup(groupId) {
+  const next = state.groups.filter(g => g.id !== groupId);
+  store.saveGroups(state.currentUser, next);
+  setState({ groups: next });
+}
+function deleteTask(groupId, taskId) {
+  const next = state.groups.map(g => g.id === groupId ? { ...g, tasks: g.tasks.filter(t => t.id !== taskId) } : g);
+  store.saveGroups(state.currentUser, next);
+  setState({ groups: next });
+}
+function toggleCollapse(groupId) { state.collapsed[groupId] = !state.collapsed[groupId]; render(); }
+
+/* ---------- RENDER ---------- */
+function renderAuth() {
+  return `
+  <div class="min-h-screen flex items-center justify-center px-4">
+    <div class="w-full max-w-sm">
+      <div class="flex items-center justify-center gap-2 mb-8">
+        <div class="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white">${ICON.book}</div>
+        <span class="text-2xl text-slate-800 font-display">Görev Defterim</span>
+      </div>
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+        <div class="flex mb-6 bg-slate-100 rounded-xl p-1">
+          <button onclick="setState({authMode:'login', authError:''})" class="flex-1 py-2 rounded-lg text-sm font-medium transition ${state.authMode === 'login' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}">Giriş Yap</button>
+          <button onclick="setState({authMode:'register', authError:''})" class="flex-1 py-2 rounded-lg text-sm font-medium transition ${state.authMode === 'register' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}">Kayıt Ol</button>
+        </div>
+        <form onsubmit="handleAuth(event)" class="space-y-4">
+          <div>
+            <label class="block text-sm font-semibold text-slate-700 mb-1.5">Kullanıcı Adı</label>
+            <div class="relative">
+              <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">${ICON.user}</span>
+              <input id="authName" placeholder="örn: reyyan123" class="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm font-semibold text-slate-700 mb-1.5">Şifre</label>
+            <div class="relative">
+              <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">${ICON.lock}</span>
+              <input id="authPass" type="password" placeholder="••••••••" class="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+            </div>
+          </div>
+          ${state.authError ? `<p class="text-sm text-rose-600">${esc(state.authError)}</p>` : ''}
+          <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-xl transition">${state.authMode === 'login' ? 'Giriş Yap' : 'Hesap Oluştur'}</button>
+        </form>
+      </div>
+      <p class="text-center text-xs text-slate-400 mt-4">Görevlerin bu taraycıya kaydedilir, bir sonraki girişinde seni bekliyor olacak.</p>
+    </div>
+  </div>`;
+}
+
+function renderApp() {
+  const today = todayISO();
+  const totalToday = state.groups.filter(g => g.date === today).reduce((s, g) => s + g.tasks.length, 0);
+  const doneToday = state.groups.filter(g => g.date === today).reduce((s, g) => s + g.tasks.filter(t => t.done).length, 0);
+  const sorted = [...state.groups].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : b.createdAt - a.createdAt));
+
+  const groupsHtml = sorted.length === 0 ? `
+    <div class="text-center py-16 text-slate-400">
+      <div class="mx-auto mb-3 text-slate-300 w-8 h-8 flex items-center justify-center">${ICON.book}</div>
+      <p class="font-medium text-slate-500">Henüz görev grubu yok</p>
+      <p class="text-sm mt-1">Başlamak için "Görev Grubu Ekle" butonuna tıkla.</p>
+    </div>` : sorted.map(g => {
+      const color = colorFor(g.title);
+      const doneCount = g.tasks.filter(t => t.done).length;
+      const isCollapsed = state.collapsed[g.id];
+      const pct = g.tasks.length ? (doneCount / g.tasks.length) * 100 : 0;
+      const taskRows = g.tasks.map(t => {
+        const pr = PRIORITY[t.priority || 'medium'];
+        return `
+        <div class="flex items-center gap-3 bg-slate-50 hover:bg-slate-100 rounded-xl px-3 py-2 group">
+          <button onclick="toggleTask('${g.id}','${t.id}')" class="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition ${t.done ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300'}">
+            ${t.done ? '<span class="text-white text-xs">✓</span>' : ''}
+          </button>
+          <span class="w-1.5 h-1.5 rounded-full ${pr.dot} shrink-0" title="${pr.label} öncelik"></span>
+          <span class="text-sm flex-1 ${t.done ? 'line-through text-slate-400' : 'text-slate-700'}">${esc(t.text)}</span>
+          <button onclick="deleteTask('${g.id}','${t.id}')" class="text-slate-300 hover:text-rose-600 opacity-0 group-hover:opacity-100 transition shrink-0">${ICON.x}</button>
+        </div>`;
+      }).join('');
+      return `
+      <div class="bg-white rounded-2xl border border-slate-200 border-l-4 ${color.border} overflow-hidden">
+        <div class="p-4 flex items-start justify-between gap-3">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 flex-wrap mb-1">
+              <span class="text-xs font-semibold px-2 py-0.5 rounded-full ${color.bg} ${color.text}">${esc(g.title)}</span>
+              <span class="flex items-center gap-1 text-xs text-slate-400">${ICON.calendar} ${formatDate(g.date)}</span>
+            </div>
+            <div class="w-full bg-slate-100 rounded-full h-1.5 mt-2"><div class="h-1.5 rounded-full ${color.bar}" style="width:${pct}%"></div></div>
+            <p class="text-xs text-slate-400 mt-1">${doneCount} / ${g.tasks.length} tamamlandı</p>
+          </div>
+          <div class="flex items-center gap-1 shrink-0">
+            <button onclick="toggleCollapse('${g.id}')" class="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100">${isCollapsed ? ICON.chevDown : ICON.chevUp}</button>
+            <button onclick="deleteGroup('${g.id}')" class="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50">${ICON.trash}</button>
+          </div>
+        </div>
+        ${isCollapsed ? '' : `<div class="px-4 pb-4 space-y-1.5">${taskRows}</div>`}
+      </div>`;
+    }).join('');
+
+  const modalHtml = !state.modalOpen ? '' : `
+    <div class="fixed inset-0 bg-slate-900/40 flex items-center justify-center p-4 z-50" onclick="if(event.target===this) closeModal()">
+      <div class="bg-white rounded-2xl w-full max-w-md p-6">
+        <div class="flex items-center justify-between mb-5">
+          <h2 class="text-xl font-bold text-slate-800">Görev Grubu Ekle</h2>
+          <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600">${ICON.x}</button>
+        </div>
+        <div class="mb-4">
+          <label class="block text-sm font-semibold text-slate-700 mb-1.5">Tarih</label>
+          <input id="formDate" type="date" value="${state.formDate}" class="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+        </div>
+        <div class="mb-4">
+          <label class="block text-sm font-semibold text-slate-700 mb-1.5">Başlık</label>
+          <input id="formTitle" placeholder="örn: Proje raporu" value="${esc(state.formTitle)}" class="w-full px-3 py-2.5 rounded-xl border border-blue-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+        </div>
+        <div class="mb-4">
+          <label class="block text-sm font-semibold text-slate-700 mb-1.5">Görevler</label>
+          <div class="space-y-2">
+            ${state.formTasks.map((t, idx) => `
+            <div class="flex items-center gap-2 border border-slate-200 rounded-xl p-1.5 pl-1.5">
+              <span class="w-7 h-7 rounded-full bg-blue-600 text-white text-xs font-semibold flex items-center justify-center shrink-0">${idx + 1}</span>
+              <input class="task-row-input flex-1 text-sm focus:outline-none min-w-0" placeholder="Ne yapılacak?" value="${esc(t.text)}" oninput="state.formTasks[${idx}].text=this.value" />
+              <select onchange="state.formTasks[${idx}].priority=this.value" class="text-xs text-slate-500 border-none bg-transparent focus:outline-none shrink-0">
+                ${Object.entries(PRIORITY).map(([key, p]) => `<option value="${key}" ${t.priority === key ? 'selected' : ''}>${p.label}</option>`).join('')}
+              </select>
+              ${state.formTasks.length > 1 ? `<button onclick="removeTaskRow('${t.id}')" class="text-slate-300 hover:text-rose-600 shrink-0 mr-1">${ICON.x}</button>` : ''}
+            </div>`).join('')}
+          </div>
+          <button onclick="addTaskRow()" class="w-full mt-2 border border-dashed border-slate-300 rounded-xl py-2 text-sm text-slate-500 hover:bg-slate-50 hover:border-slate-400 transition flex items-center justify-center gap-1.5">${ICON.plus} Görev Ekle</button>
+        </div>
+        ${state.formError ? `<p class="text-sm text-rose-600 mb-3">${esc(state.formError)}</p>` : ''}
+        <button onclick="saveGroup()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl transition">Kaydet</button>
+      </div>
+    </div>`;
+
+  return `
+  <div class="min-h-screen">
+    <header class="bg-white border-b border-slate-200">
+      <div class="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <div class="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white">${ICON.book}</div>
+          <span class="text-xl text-slate-800 font-display">Görev Defterim</span>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="text-sm text-slate-500 hidden sm:inline">Merhaba, <span class="font-semibold text-slate-700">${esc(state.currentUser)}</span></span>
+          <button onclick="handleLogout()" class="flex items-center gap-1.5 text-sm text-slate-500 hover:text-rose-600 transition px-2 py-1.5 rounded-lg hover:bg-rose-50">${ICON.logout} Çıkış</button>
+        </div>
+      </div>
+    </header>
+    <main class="max-w-2xl mx-auto px-4 py-6">
+      <div class="flex justify-end mb-4">
+        <button onclick="openModal()" class="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition shrink-0">${ICON.plus} Görev Grubu Ekle</button>
+      </div>
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 mb-6">
+        <p class="text-sm text-slate-500">Bugün</p>
+        <p class="text-lg font-semibold text-slate-800">${formatDate(today)}</p>
+        ${totalToday > 0 ? `<p class="text-sm text-slate-500 mt-1">${doneToday} / ${totalToday} görev tamamlandı</p>` : `<p class="text-sm text-slate-400 mt-1">Bugün için görev yok</p>`}
+      </div>
+      <div class="space-y-4">${groupsHtml}</div>
+    </main>
+    ${modalHtml}
+  </div>`;
+}
+
+function render() {
+  document.getElementById('root').innerHTML = state.currentUser ? renderApp() : renderAuth();
+}
+render();
+</script>
+</body>
+</html>
