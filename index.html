@@ -100,12 +100,6 @@ function formatDate(iso) {
 function uid() { return Math.random().toString(36).slice(2, 10) + Date.now().toString(36); }
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
-const PRIORITY = {
-  high: { label: 'Yüksek', dot: 'bg-rose-500', badge: 'bg-rose-100 text-rose-700' },
-  medium: { label: 'Orta', dot: 'bg-amber-500', badge: 'bg-amber-100 text-amber-700' },
-  low: { label: 'Düşük', dot: 'bg-slate-400', badge: 'bg-slate-100 text-slate-600' },
-};
-
 /* ---------- STATE ---------- */
 let state = {
   booting: true,
@@ -117,9 +111,10 @@ let state = {
   modalOpen: false,
   formDate: todayISO(),
   formTitle: '',
-  formTasks: [{ id: uid(), text: '', priority: 'medium' }],
+  formTasks: [{ id: uid(), text: '' }],
   formError: '',
   collapsed: {},
+  syncError: '',
 };
 
 function setState(patch) { Object.assign(state, patch); render(); }
@@ -169,10 +164,10 @@ function handleLogout() {
   setState({ currentUser: null, groups: [] });
 }
 function openModal() {
-  setState({ modalOpen: true, formDate: todayISO(), formTitle: '', formTasks: [{ id: uid(), text: '', priority: 'medium' }], formError: '' });
+  setState({ modalOpen: true, formDate: todayISO(), formTitle: '', formTasks: [{ id: uid(), text: '' }], formError: '' });
 }
 function closeModal() { setState({ modalOpen: false }); }
-function addTaskRow() { state.formTasks.push({ id: uid(), text: '', priority: 'medium' }); render(); }
+function addTaskRow() { state.formTasks.push({ id: uid(), text: '' }); render(); }
 function removeTaskRow(id) {
   if (state.formTasks.length > 1) { state.formTasks = state.formTasks.filter(t => t.id !== id); render(); }
 }
@@ -183,27 +178,43 @@ async function saveGroup() {
   if (tasks.length === 0) return setState({ formError: 'En az bir görev girmelisin.' });
   const newGroup = {
     id: uid(), date: document.getElementById('formDate').value || todayISO(), title, createdAt: Date.now(),
-    tasks: tasks.map(t => ({ id: uid(), text: t.text.trim(), priority: t.priority || 'medium', done: false })),
+    tasks: tasks.map(t => ({ id: uid(), text: t.text.trim(), done: false })),
   };
   const next = [newGroup, ...state.groups];
-  await store.saveGroups(state.currentUser, next);
-  setState({ groups: next, modalOpen: false });
+  try {
+    await store.saveGroups(state.currentUser, next);
+    setState({ groups: next, modalOpen: false, syncError: '' });
+  } catch {
+    setState({ formError: 'Kaydedilemedi, internet bağlantını kontrol edip tekrar dene.' });
+  }
 }
 async function toggleTask(groupId, taskId) {
   const next = state.groups.map(g => g.id === groupId
     ? { ...g, tasks: g.tasks.map(t => t.id === taskId ? { ...t, done: !t.done } : t) } : g);
   setState({ groups: next });
-  await store.saveGroups(state.currentUser, next);
+  try {
+    await store.saveGroups(state.currentUser, next);
+  } catch {
+    setState({ syncError: 'Değişiklik kaydedilemedi, internet bağlantını kontrol et.' });
+  }
 }
 async function deleteGroup(groupId) {
   const next = state.groups.filter(g => g.id !== groupId);
   setState({ groups: next });
-  await store.saveGroups(state.currentUser, next);
+  try {
+    await store.saveGroups(state.currentUser, next);
+  } catch {
+    setState({ syncError: 'Silme işlemi kaydedilemedi, internet bağlantını kontrol et.' });
+  }
 }
 async function deleteTask(groupId, taskId) {
   const next = state.groups.map(g => g.id === groupId ? { ...g, tasks: g.tasks.filter(t => t.id !== taskId) } : g);
   setState({ groups: next });
-  await store.saveGroups(state.currentUser, next);
+  try {
+    await store.saveGroups(state.currentUser, next);
+  } catch {
+    setState({ syncError: 'Silme işlemi kaydedilemedi, internet bağlantını kontrol et.' });
+  }
 }
 function toggleCollapse(groupId) { state.collapsed[groupId] = !state.collapsed[groupId]; render(); }
 
@@ -268,13 +279,11 @@ function renderApp() {
       const isCollapsed = state.collapsed[g.id];
       const pct = g.tasks.length ? (doneCount / g.tasks.length) * 100 : 0;
       const taskRows = g.tasks.map(t => {
-        const pr = PRIORITY[t.priority || 'medium'];
         return `
         <div class="flex items-center gap-3 bg-slate-50 hover:bg-slate-100 rounded-xl px-3 py-2 group">
           <button onclick="toggleTask('${g.id}','${t.id}')" class="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition ${t.done ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300'}">
             ${t.done ? '<span class="text-white text-xs">✓</span>' : ''}
           </button>
-          <span class="w-1.5 h-1.5 rounded-full ${pr.dot} shrink-0" title="${pr.label} öncelik"></span>
           <span class="text-sm flex-1 ${t.done ? 'line-through text-slate-400' : 'text-slate-700'}">${esc(t.text)}</span>
           <button onclick="deleteTask('${g.id}','${t.id}')" class="text-slate-300 hover:text-rose-600 opacity-0 group-hover:opacity-100 transition shrink-0">${ICON.x}</button>
         </div>`;
@@ -321,9 +330,6 @@ function renderApp() {
             <div class="flex items-center gap-2 border border-slate-200 rounded-xl p-1.5 pl-1.5">
               <span class="w-7 h-7 rounded-full bg-blue-600 text-white text-xs font-semibold flex items-center justify-center shrink-0">${idx + 1}</span>
               <input class="task-row-input flex-1 text-sm focus:outline-none min-w-0" placeholder="Ne yapılacak?" value="${esc(t.text)}" oninput="state.formTasks[${idx}].text=this.value" />
-              <select onchange="state.formTasks[${idx}].priority=this.value" class="text-xs text-slate-500 border-none bg-transparent focus:outline-none shrink-0">
-                ${Object.entries(PRIORITY).map(([key, p]) => `<option value="${key}" ${t.priority === key ? 'selected' : ''}>${p.label}</option>`).join('')}
-              </select>
               ${state.formTasks.length > 1 ? `<button onclick="removeTaskRow('${t.id}')" class="text-slate-300 hover:text-rose-600 shrink-0 mr-1">${ICON.x}</button>` : ''}
             </div>`).join('')}
           </div>
@@ -349,6 +355,7 @@ function renderApp() {
       </div>
     </header>
     <main class="max-w-2xl mx-auto px-4 py-6">
+      ${state.syncError ? `<div class="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-xl px-4 py-3 mb-4">${esc(state.syncError)}</div>` : ''}
       <div class="flex justify-end mb-4">
         <button onclick="openModal()" class="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition shrink-0">${ICON.plus} Görev Grubu Ekle</button>
       </div>
