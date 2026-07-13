@@ -266,7 +266,7 @@ function renderApp() {
   const today = todayISO();
   const totalToday = state.groups.filter(g => g.date === today).reduce((s, g) => s + g.tasks.length, 0);
   const doneToday = state.groups.filter(g => g.date === today).reduce((s, g) => s + g.tasks.filter(t => t.done).length, 0);
-  const sorted = [...state.groups].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : b.createdAt - a.createdAt));
+  const sorted = [...state.groups].sort((a, b) => (a.date > b.date ? 1 : a.date < b.date ? -1 : a.createdAt - b.createdAt));
 
   const dateOrder = [];
   const byDate = {};
