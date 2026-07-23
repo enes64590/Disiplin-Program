@@ -325,7 +325,7 @@ function renderApp() {
   const today = todayISO();
   const totalToday = state.groups.filter(g => g.date === today).reduce((s, g) => s + g.tasks.length, 0);
   const doneToday = state.groups.filter(g => g.date === today).reduce((s, g) => s + g.tasks.filter(t => t.done).length, 0);
-  const sorted = [...state.groups].sort((a, b) => (a.date > b.date ? 1 : a.date < b.date ? -1 : a.createdAt - b.createdAt));
+  const sorted = [...state.groups].filter(g => g.date !== today).sort((a, b) => (a.date > b.date ? 1 : a.date < b.date ? -1 : a.createdAt - b.createdAt));
 
   const dateOrder = [];
   const byDate = {};
@@ -478,9 +478,11 @@ function renderApp() {
               <span class="text-xs font-semibold px-2 py-0.5 rounded-full ${colorFor(g.title).bg} ${colorFor(g.title).text}">${esc(g.title)}</span>
               <div class="mt-1.5 space-y-1">
                 ${g.tasks.map(t => `
-                  <div class="flex items-center gap-2 text-sm ${t.done ? 'text-slate-400 line-through' : 'text-slate-600'}">
-                    <span class="w-1.5 h-1.5 rounded-full ${t.done ? 'bg-emerald-400' : 'bg-slate-300'} shrink-0"></span>
-                    ${esc(t.text)}
+                  <div class="flex items-center gap-2 text-sm">
+                    <button onclick="toggleTask('${g.id}','${t.id}')" class="w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition ${t.done ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300'}">
+                      ${t.done ? '<span class="text-white text-xs">✓</span>' : ''}
+                    </button>
+                    <span class="text-sm ${t.done ? 'line-through text-slate-400' : 'text-slate-600'}">${esc(t.text)}</span>
                   </div>`).join('')}
               </div>
             </div>`).join('');
