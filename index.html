@@ -80,6 +80,13 @@ const store = {
   async saveGroups(username, groups) {
     await db.ref('tasks/' + username).set(groups);
   },
+  async getNotes(username) {
+    const snap = await db.ref('notes/' + username).once('value');
+    return snap.val() || {};
+  },
+  async saveNotes(username, notes) {
+    await db.ref('notes/' + username).set(notes);
+  },
 };
 
 /* ---------- HELPERS ---------- */
@@ -126,6 +133,10 @@ let state = {
   collapsed: {},
   syncError: '',
   editingTask: null,
+  notes: {},
+  noteModalOpen: false,
+  noteDate: todayISO(),
+  noteText: '',
 };
 
 function setState(patch) { Object.assign(state, patch); render(); }
@@ -136,6 +147,7 @@ function setState(patch) { Object.assign(state, patch); render(); }
     try {
       state.currentUser = session;
       state.groups = await store.getGroups(session);
+      state.notes = await store.getNotes(session);
     } catch {
       state.currentUser = null;
     }
@@ -155,17 +167,18 @@ async function handleAuth(e) {
   setState({ authLoading: true, authError: '' });
   try {
     const users = await store.getUsers();
-    if (state.authMode === 'register') {
-      if (users[name]) { setState({ authLoading: false, authError: 'Bu kullanıcı adı zaten alınmış.' }); return; }
-      await store.saveUser(name, pass);
-      store.setSession(name);
-      setState({ currentUser: name, groups: [], authError: '', authLoading: false });
-    } else {
-      if (!users[name] || users[name] !== pass) { setState({ authLoading: false, authError: 'Kullanıcı adı veya şifre hatalı.' }); return; }
-      store.setSession(name);
-      const groups = await store.getGroups(name);
-      setState({ currentUser: name, groups, authError: '', authLoading: false });
-    }
+      if (state.authMode === 'register') {
+        if (users[name]) { setState({ authLoading: false, authError: 'Bu kullanıcı adı zaten alınmış.' }); return; }
+        await store.saveUser(name, pass);
+        store.setSession(name);
+        setState({ currentUser: name, groups: [], notes: {}, authError: '', authLoading: false });
+      } else {
+        if (!users[name] || users[name] !== pass) { setState({ authLoading: false, authError: 'Kullanıcı adı veya şifre hatalı.' }); return; }
+        store.setSession(name);
+        const groups = await store.getGroups(name);
+        const notes = await store.getNotes(name);
+        setState({ currentUser: name, groups, notes, authError: '', authLoading: false });
+      }
   } catch (err) {
     setState({ authLoading: false, authError: 'Bağlantı sorunu oluştu, tekrar dene.' });
   }
@@ -244,6 +257,23 @@ async function saveEditTask(groupId, taskId) {
     await store.saveGroups(state.currentUser, next);
   } catch {
     setState({ syncError: 'Değişiklik kaydedilemedi, internet bağlantını kontrol et.' });
+  }
+}
+
+/* ---------- NOTE ACTIONS ---------- */
+function openNoteModal() {
+  setState({ noteModalOpen: true, noteDate: todayISO(), noteText: state.notes[todayISO()] || '' });
+}
+function closeNoteModal() { setState({ noteModalOpen: false }); }
+async function saveNote() {
+  const date = state.noteDate;
+  const text = state.noteText.trim();
+  const next = { ...state.notes, [date]: text };
+  setState({ notes: next, noteModalOpen: false });
+  try {
+    await store.saveNotes(state.currentUser, next);
+  } catch {
+    setState({ syncError: 'Not kaydedilemedi, internet bağlantını kontrol et.' });
   }
 }
 
@@ -360,6 +390,25 @@ function renderApp() {
         <div class="space-y-3">${byDate[date].map(renderGroupCard).join('')}</div>
       </div>`).join('');
 
+  const noteModalHtml = !state.noteModalOpen ? '' : `
+    <div class="fixed inset-0 bg-slate-900/40 flex items-center justify-center p-4 z-50" onclick="if(event.target===this) closeNoteModal()">
+      <div class="bg-white rounded-2xl w-full max-w-md p-6">
+        <div class="flex items-center justify-between mb-5">
+          <h2 class="text-xl font-bold text-slate-800">Günün Notu</h2>
+          <button onclick="closeNoteModal()" class="text-slate-400 hover:text-slate-600">${ICON.x}</button>
+        </div>
+        <div class="mb-4">
+          <label class="block text-sm font-semibold text-slate-700 mb-1.5">Tarih</label>
+          <input id="noteDate" type="date" value="${state.noteDate}" oninput="state.noteDate=this.value; state.noteText=document.getElementById('noteTextArea').value" class="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+        </div>
+        <div class="mb-4">
+          <label class="block text-sm font-semibold text-slate-700 mb-1.5">Not</label>
+          <textarea id="noteTextArea" rows="5" placeholder="Bugün için notların..." oninput="state.noteText=this.value" class="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none">${esc(state.noteText)}</textarea>
+        </div>
+        <button onclick="saveNote()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl transition">Notu Kaydet</button>
+      </div>
+    </div>`;
+
   const modalHtml = !state.modalOpen ? '' : `
     <div class="fixed inset-0 bg-slate-900/40 flex items-center justify-center p-4 z-50" onclick="if(event.target===this) closeModal()">
       <div class="bg-white rounded-2xl w-full max-w-md p-6">
@@ -412,13 +461,35 @@ function renderApp() {
         <button onclick="openModal()" class="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition shrink-0">${ICON.plus} Görev Grubu Ekle</button>
       </div>
       <div class="bg-white rounded-2xl border border-slate-200 p-5 mb-6">
-        <p class="text-sm text-slate-500">Bugün</p>
-        <p class="text-lg font-semibold text-slate-800">${formatDate(today)}</p>
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <p class="text-sm text-slate-500">Bugün</p>
+            <p class="text-lg font-semibold text-slate-800">${formatDate(today)}</p>
+          </div>
+          <button onclick="openNoteModal()" class="flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-xl transition shrink-0">${ICON.edit} Not</button>
+        </div>
         ${totalToday > 0 ? `<p class="text-sm text-slate-500 mt-1">${doneToday} / ${totalToday} görev tamamlandı</p>` : `<p class="text-sm text-slate-400 mt-1">Bugün için görev yok</p>`}
+        ${state.notes[today] ? `<div class="mt-3 pt-3 border-t border-slate-100 text-sm text-slate-600 whitespace-pre-wrap">${esc(state.notes[today])}</div>` : ''}
+        ${(() => {
+          const todayGroups = state.groups.filter(g => g.date === today);
+          if (todayGroups.length === 0) return '';
+          return todayGroups.map(g => `
+            <div class="mt-3 pt-3 border-t border-slate-100">
+              <span class="text-xs font-semibold px-2 py-0.5 rounded-full ${colorFor(g.title).bg} ${colorFor(g.title).text}">${esc(g.title)}</span>
+              <div class="mt-1.5 space-y-1">
+                ${g.tasks.map(t => `
+                  <div class="flex items-center gap-2 text-sm ${t.done ? 'text-slate-400 line-through' : 'text-slate-600'}">
+                    <span class="w-1.5 h-1.5 rounded-full ${t.done ? 'bg-emerald-400' : 'bg-slate-300'} shrink-0"></span>
+                    ${esc(t.text)}
+                  </div>`).join('')}
+              </div>
+            </div>`).join('');
+        })()}
       </div>
       <div class="space-y-4">${groupsHtml}</div>
     </main>
     ${modalHtml}
+    ${noteModalHtml}
   </div>`;
 }
 
