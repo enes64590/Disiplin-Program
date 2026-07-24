@@ -134,7 +134,7 @@ let state = {
   syncError: '',
   editingTask: null,
   notes: {},
-  noteModalOpen: false,
+  view: 'app',
   noteDate: todayISO(),
   noteText: '',
 };
@@ -261,15 +261,23 @@ async function saveEditTask(groupId, taskId) {
 }
 
 /* ---------- NOTE ACTIONS ---------- */
-function openNoteModal() {
-  setState({ noteModalOpen: true, noteDate: todayISO(), noteText: state.notes[todayISO()] || '' });
+function goToNotes() {
+  setState({ view: 'notes', noteDate: todayISO(), noteText: state.notes[todayISO()] || '' });
 }
-function closeNoteModal() { setState({ noteModalOpen: false }); }
+function goToApp() { setState({ view: 'app' }); }
+function loadNoteForDate() {
+  state.noteText = state.notes[state.noteDate] || '';
+  const ta = document.getElementById('noteTextArea');
+  if (ta) ta.value = state.noteText;
+}
+function loadNoteDate(date) {
+  setState({ noteDate: date, noteText: state.notes[date] || '' });
+}
 async function saveNote() {
   const date = state.noteDate;
   const text = state.noteText.trim();
   const next = { ...state.notes, [date]: text };
-  setState({ notes: next, noteModalOpen: false });
+  setState({ notes: next });
   try {
     await store.saveNotes(state.currentUser, next);
   } catch {
@@ -390,25 +398,6 @@ function renderApp() {
         <div class="space-y-3">${byDate[date].map(renderGroupCard).join('')}</div>
       </div>`).join('');
 
-  const noteModalHtml = !state.noteModalOpen ? '' : `
-    <div class="fixed inset-0 bg-slate-900/40 flex items-center justify-center p-4 z-50" onclick="if(event.target===this) closeNoteModal()">
-      <div class="bg-white rounded-2xl w-full max-w-md p-6">
-        <div class="flex items-center justify-between mb-5">
-          <h2 class="text-xl font-bold text-slate-800">Günün Notu</h2>
-          <button onclick="closeNoteModal()" class="text-slate-400 hover:text-slate-600">${ICON.x}</button>
-        </div>
-        <div class="mb-4">
-          <label class="block text-sm font-semibold text-slate-700 mb-1.5">Tarih</label>
-          <input id="noteDate" type="date" value="${state.noteDate}" oninput="state.noteDate=this.value; state.noteText=document.getElementById('noteTextArea').value" class="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
-        </div>
-        <div class="mb-4">
-          <label class="block text-sm font-semibold text-slate-700 mb-1.5">Not</label>
-          <textarea id="noteTextArea" rows="5" placeholder="Bugün için notların..." oninput="state.noteText=this.value" class="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none">${esc(state.noteText)}</textarea>
-        </div>
-        <button onclick="saveNote()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl transition">Notu Kaydet</button>
-      </div>
-    </div>`;
-
   const modalHtml = !state.modalOpen ? '' : `
     <div class="fixed inset-0 bg-slate-900/40 flex items-center justify-center p-4 z-50" onclick="if(event.target===this) closeModal()">
       <div class="bg-white rounded-2xl w-full max-w-md p-6">
@@ -466,10 +455,9 @@ function renderApp() {
             <p class="text-sm text-slate-500">Bugün</p>
             <p class="text-lg font-semibold text-slate-800">${formatDate(today)}</p>
           </div>
-          <button onclick="openNoteModal()" class="flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-xl transition shrink-0">${ICON.edit} Not</button>
+          <button onclick="goToNotes()" class="flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-xl transition shrink-0">${ICON.edit} Notlar</button>
         </div>
         ${totalToday > 0 ? `<p class="text-sm text-slate-500 mt-1">${doneToday} / ${totalToday} görev tamamlandı</p>` : `<p class="text-sm text-slate-400 mt-1">Bugün için görev yok</p>`}
-        ${state.notes[today] ? `<div class="mt-3 pt-3 border-t border-slate-100 text-sm text-slate-600 whitespace-pre-wrap">${esc(state.notes[today])}</div>` : ''}
         ${(() => {
           const todayGroups = state.groups.filter(g => g.date === today);
           if (todayGroups.length === 0) return '';
@@ -491,14 +479,60 @@ function renderApp() {
       <div class="space-y-4">${groupsHtml}</div>
     </main>
     ${modalHtml}
-    ${noteModalHtml}
+  </div>`;
+}
+
+function renderNotes() {
+  const dates = Object.keys(state.notes).sort();
+  return `
+  <div class="min-h-screen">
+    <header class="bg-white border-b border-slate-200">
+      <div class="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <div class="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white">${ICON.book}</div>
+          <span class="text-xl text-slate-800 font-display">Notlar</span>
+        </div>
+        <button onclick="goToApp()" class="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 transition px-2 py-1.5 rounded-lg hover:bg-slate-100">${ICON.x} Geri</button>
+      </div>
+    </header>
+    <main class="max-w-2xl mx-auto px-4 py-6">
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 mb-6">
+        <div class="mb-4">
+          <label class="block text-sm font-semibold text-slate-700 mb-1.5">Tarih</label>
+          <input id="noteDate" type="date" value="${state.noteDate}" oninput="state.noteDate=this.value; loadNoteForDate()" class="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+        </div>
+        <div class="mb-4">
+          <label class="block text-sm font-semibold text-slate-700 mb-1.5">Not</label>
+          <textarea id="noteTextArea" rows="8" placeholder="Bu tarih için notların..." oninput="state.noteText=this.value" class="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none">${esc(state.noteText)}</textarea>
+        </div>
+        <button onclick="saveNote()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl transition">Notu Kaydet</button>
+        ${state.syncError ? `<p class="text-sm text-rose-600 mt-3">${esc(state.syncError)}</p>` : ''}
+      </div>
+      ${dates.length > 0 ? `
+      <div class="bg-white rounded-2xl border border-slate-200 p-5">
+        <h3 class="text-sm font-semibold text-slate-700 mb-3">Kayıtlı Notlar</h3>
+        <div class="space-y-3">
+          ${dates.map(d => `
+            <div class="border border-slate-100 rounded-xl p-3">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-xs font-semibold text-slate-500">${formatDate(d)}</span>
+                <button onclick="loadNoteDate('${d}')" class="text-xs text-blue-600 hover:text-blue-700">Düzenle</button>
+              </div>
+              <p class="text-sm text-slate-600 whitespace-pre-wrap">${esc(state.notes[d])}</p>
+            </div>
+          `).join('')}
+        </div>
+      </div>` : ''}
+    </main>
   </div>`;
 }
 
 function render() {
   const root = document.getElementById('root');
   if (state.booting) root.innerHTML = renderBooting();
-  else root.innerHTML = state.currentUser ? renderApp() : renderAuth();
+  else if (!state.currentUser) root.innerHTML = renderAuth();
+  else if (state.view === 'notes') root.innerHTML = renderNotes();
+  else root.innerHTML = renderApp();
 }
 render();
 </script>
