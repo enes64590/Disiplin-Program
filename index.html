@@ -471,13 +471,26 @@ function renderApp() {
             <div class="mt-3 pt-3 border-t border-slate-100">
               <span class="text-xs font-semibold px-2 py-0.5 rounded-full ${colorFor(g.title).bg} ${colorFor(g.title).text}">${esc(g.title)}</span>
               <div class="mt-1.5 space-y-1">
-                ${g.tasks.map(t => `
-                  <div class="flex items-center gap-2 text-sm">
+                ${g.tasks.map(t => {
+                  const isEditing = state.editingTask && state.editingTask.groupId === g.id && state.editingTask.taskId === t.id;
+                  if (isEditing) {
+                    return `
+                    <div class="flex items-center gap-2 bg-blue-50 rounded-xl px-3 py-2">
+                      <input id="editTaskInput" autofocus value="${esc(t.text)}" class="flex-1 text-sm bg-white border border-blue-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-400" onkeydown="if(event.key==='Enter') saveEditTask('${g.id}','${t.id}'); if(event.key==='Escape') cancelEditTask();" />
+                      <button onclick="saveEditTask('${g.id}','${t.id}')" class="text-emerald-600 hover:text-emerald-700 shrink-0" title="Kaydet">${ICON.check}</button>
+                      <button onclick="cancelEditTask()" class="text-slate-400 hover:text-rose-600 shrink-0" title="Vazgeç">${ICON.x}</button>
+                    </div>`;
+                  }
+                  return `
+                  <div class="flex items-center gap-2 text-sm group">
                     <button onclick="toggleTask('${g.id}','${t.id}')" class="w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition ${t.done ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300'}">
                       ${t.done ? '<span class="text-white text-xs">✓</span>' : ''}
                     </button>
-                    <span class="text-sm ${t.done ? 'line-through text-slate-400' : 'text-slate-600'}">${esc(t.text)}</span>
-                  </div>`).join('')}
+                    <span class="flex-1 text-sm ${t.done ? 'line-through text-slate-400' : 'text-slate-600'}">${esc(t.text)}</span>
+                    <button onclick="startEditTask('${g.id}','${t.id}')" class="text-blue-500 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg p-1 transition shrink-0 opacity-0 group-hover:opacity-100" title="Düzenle">${ICON.edit}</button>
+                    <button onclick="deleteTask('${g.id}','${t.id}')" class="text-rose-400 hover:text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg p-1 transition shrink-0 opacity-0 group-hover:opacity-100" title="Sil">${ICON.x}</button>
+                  </div>`;
+                }).join('')}
               </div>
             </div>`).join('');
         })()}
