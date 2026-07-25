@@ -151,6 +151,7 @@ function setState(patch) { Object.assign(state, patch); render(); }
   } catch {
     state.currentUser = null;
     state.groups = [];
+    state.notes = {};
   }
   state.booting = false;
   render();
@@ -175,8 +176,8 @@ async function handleAuth(e) {
       } else {
         if (!users[name] || users[name] !== pass) { setState({ authLoading: false, authError: 'Kullanıcı adı veya şifre hatalı.' }); return; }
         store.setSession(name);
-        const [groups, notes] = await Promise.all([store.getGroups(name), store.getNotes(name)]);
-        setState({ currentUser: name, groups, notes, authError: '', authLoading: false });
+        const groups = await store.getGroups(name);
+        setState({ currentUser: name, groups, notes: {}, authError: '', authLoading: false });
       }
   } catch (err) {
     setState({ authLoading: false, authError: 'Bağlantı sorunu oluştu, tekrar dene.' });
