@@ -233,7 +233,7 @@ async function deleteGroup(groupId) {
   }
 }
 async function deleteTask(groupId, taskId) {
-  const next = state.groups.map(g => g.id === groupId ? { ...g, tasks: g.tasks.filter(t => t.id !== taskId) } : g);
+  const next = state.groups.map(g => g.id === groupId ? { ...g, tasks: g.tasks.filter(t => t.id !== taskId) } : g).filter(g => g.tasks.length > 0);
   setState({ groups: next });
   try {
     await store.saveGroups(state.currentUser, next);
