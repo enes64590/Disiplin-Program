@@ -143,15 +143,15 @@ let state = {
 function setState(patch) { Object.assign(state, patch); render(); }
 
 (async function boot() {
-  const session = store.getSession();
-  if (session) {
-    try {
+  try {
+    const session = store.getSession();
+    if (session) {
       state.currentUser = session;
       state.groups = await store.getGroups(session);
-      state.notes = await store.getNotes(session);
-    } catch {
-      state.currentUser = null;
     }
+  } catch {
+    state.currentUser = null;
+    state.groups = [];
   }
   state.booting = false;
   render();
@@ -176,8 +176,7 @@ async function handleAuth(e) {
       } else {
         if (!users[name] || users[name] !== pass) { setState({ authLoading: false, authError: 'Kullanıcı adı veya şifre hatalı.' }); return; }
         store.setSession(name);
-        const groups = await store.getGroups(name);
-        const notes = await store.getNotes(name);
+        const [groups, notes] = await Promise.all([store.getGroups(name), store.getNotes(name)]);
         setState({ currentUser: name, groups, notes, authError: '', authLoading: false });
       }
   } catch (err) {
@@ -186,7 +185,7 @@ async function handleAuth(e) {
 }
 function handleLogout() {
   store.setSession('');
-  setState({ currentUser: null, groups: [] });
+  setState({ currentUser: null, groups: [], notes: {} });
 }
 function openModal() {
   setState({ modalOpen: true, formDate: todayISO(), formTitle: '', formTasks: [{ id: uid(), text: '' }], formError: '' });
@@ -281,7 +280,18 @@ async function saveEditGroup(groupId) {
 
 /* ---------- NOTE ACTIONS ---------- */
 function goToNotes() {
-  setState({ view: 'notes', noteDate: todayISO(), noteText: state.notes[todayISO()] || '' });
+  state.view = 'notes';
+  state.noteDate = todayISO();
+  state.noteText = state.notes[todayISO()] || '';
+  render();
+  // Load notes from Firebase if not loaded yet
+  if (Object.keys(state.notes).length === 0 && state.currentUser) {
+    store.getNotes(state.currentUser).then(notes => {
+      state.notes = notes;
+      state.noteText = notes[state.noteDate] || '';
+      render();
+    }).catch(() => {});
+  }
 }
 function goToApp() { setState({ view: 'app' }); }
 function loadNoteForDate() {
